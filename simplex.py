@@ -116,12 +116,6 @@ class Simplex:
 		self.dimension = dimension
 		self.size = size
 
-		self.simplex_graph = Graph()
-		self.dual_graph = Graph()
-
-		self.create_simplex_graph()
-		self.create_dual_graph()
-
 	def is_valid_simplex_key(self, key):
 		return all(0 <= x <= self.size for x in key) and sum(key) == self.size
 
@@ -141,18 +135,24 @@ class Simplex:
 		return Simplex.static_compute_simplex_grid_lines(self.dimension, self.size)
 
 	def create_simplex_graph(self):
+		simplex_graph = Graph()
+
 		for key in self.simplex_keys():
-			self.simplex_graph.create_node(key)
+			simplex_graph.create_node(key)
 
 		for key in self.simplex_keys():
 			for positive_key_diff in self.unit_ball_positive_key_diffs():
 				neighbour_key = key + positive_key_diff
 				if self.is_valid_simplex_key(neighbour_key):
-					node_1 = self.simplex_graph.node(key)
-					node_2 = self.simplex_graph.node(neighbour_key)
-					self.simplex_graph.create_edge(node_1, node_2, 1.0)
+					node_1 = simplex_graph.node(key)
+					node_2 = simplex_graph.node(neighbour_key)
+					simplex_graph.create_edge(node_1, node_2, 1.0)
+
+		return simplex_graph
 
 	def create_dual_graph(self):
+		dual_graph = Graph()
+
 		for vertex_index in range(self.dimension + 1):
 			terminal_dual_key = numpy.zeros(self.dimension + 1)
 			for i in range(self.dimension + 1):
@@ -160,13 +160,13 @@ class Simplex:
 					terminal_dual_key[i] = -1 * self.size
 				else:
 					terminal_dual_key[i] = 2 * self.size / self.dimension
-			self.dual_graph.create_node(terminal_dual_key)
+			dual_graph.create_node(terminal_dual_key)
 
 		for dual_key in Simplex.static_simplex_keys(self.dimension, self.size - 1):
-			self.dual_graph.create_node(dual_key)
+			dual_graph.create_node(dual_key)
 
 		for dual_key in Simplex.static_simplex_keys(self.dimension, self.size - 2):
-			self.dual_graph.create_node(dual_key)
+			dual_graph.create_node(dual_key)
 
 			for i in range(self.dimension + 1):
 				key_diff = numpy.zeros(self.dimension + 1)
@@ -174,9 +174,9 @@ class Simplex:
 
 				neighbour_dual_key = dual_key + key_diff
 
-				self.dual_graph.create_edge(
-					self.dual_graph.node(dual_key),
-					self.dual_graph.node(neighbour_dual_key),
+				dual_graph.create_edge(
+					dual_graph.node(dual_key),
+					dual_graph.node(neighbour_dual_key),
 					1.0
 				)
 
@@ -195,14 +195,18 @@ class Simplex:
 				# print(max_distance_to_center, dual_key, offset, offset)
 				# offset = max(numpy.amax(dual_key) - (2. * self.size / 3.), 0)
 				# print(key, numpy.amin(key), numpy.amax(key), max(self.num_hyperplanes - 1 - numpy.amin(key), numpy.amax(key)), offset)
-				self.dual_graph.create_edge(
-					self.dual_graph.node(dual_key),
-					self.dual_graph.node(self.dual_graph.key(vertex_index)),
+				dual_graph.create_edge(
+					dual_graph.node(dual_key),
+					dual_graph.node(dual_graph.key(vertex_index)),
 					base + offset - 1
 				)
 
+		return dual_graph
+
 	def write_dual_graph_instance(self):
-		print("write dual graph instance with", self.dual_graph.num_nodes, "nodes and", len(self.dual_graph.edges()), "edges")
+		dual_graph = self.create_dual_graph()
+
+		print("write dual graph instance with", dual_graph.num_nodes, "nodes and", len(dual_graph.edges()), "edges")
 
 		instance = {
 			"graph": {
@@ -215,20 +219,20 @@ class Simplex:
 			]
 		}
 
-		for node in self.dual_graph.nodes():
+		for node in dual_graph.nodes():
 			instance["graph"]["nodes"].append(
 				{
 					"id": node,
-					"key": str(self.dual_graph.key(node))
+					"key": str(dual_graph.key(node))
 				}
 			)
 
-		for edge in self.dual_graph.edges():
+		for edge in dual_graph.edges():
 			instance["graph"]["edges"].append(
 				{
 					"tail": edge["tail"],
 					"head": edge["head"],
-					"weight": self.dual_graph.edge_weights[edge["id"]]
+					"weight": dual_graph.edge_weights[edge["id"]]
 				}
 			)
 
@@ -249,29 +253,33 @@ class Simplex:
 				subplot.plot([point[0]], [point[1]], [point[2]], colour + "o")
 
 		if plot_simplex:
-			for node in self.simplex_graph.nodes():
-				plot_point(Simplex.static_key_to_coordinates(self.simplex_graph.key(node)), "r")
+			simplex_graph = self.create_simplex_graph()
+
+			for node in simplex_graph.nodes():
+				plot_point(Simplex.static_key_to_coordinates(simplex_graph.key(node)), "r")
 
 			edge_lines = []
 
-			for edge in self.simplex_graph.edges():
+			for edge in simplex_graph.edges():
 				edge_lines.append(
 					[
-						Simplex.static_key_to_coordinates(self.simplex_graph.key(edge["tail"])),
-						Simplex.static_key_to_coordinates(self.simplex_graph.key(edge["head"]))
+						Simplex.static_key_to_coordinates(simplex_graph.key(edge["tail"])),
+						Simplex.static_key_to_coordinates(simplex_graph.key(edge["head"]))
 					]
 				)
 
 			matplotlib_plotter.plot_lines(subplot, edge_lines, color="red", alpha=0.5)
 
 		if plot_dual:
+			dual_graph = self.create_dual_graph()
+
 			def is_terminal_node(node):
 				return node < self.dimension + 1
 
 			# return node >= self.dual_graph.num_nodes - (self.dimension + 1)
 
 			def compute_dual_coords(node):
-				dual_key = self.dual_graph.key(node)
+				dual_key = dual_graph.key(node)
 				if is_terminal_node(node):
 					return Simplex.static_key_to_coordinates(dual_key)
 				else:
@@ -281,7 +289,7 @@ class Simplex:
 					if sum(dual_key) == self.size - 2:
 						return Simplex.static_key_to_coordinates(dual_key) + 2. / (self.dimension + 1) * Simplex.static_key_to_coordinates(numpy.ones(self.dimension + 1))
 
-			for node in self.dual_graph.nodes():
+			for node in dual_graph.nodes():
 				if is_terminal_node(node) and not plot_dual_terminals:
 					continue
 
@@ -300,7 +308,7 @@ class Simplex:
 			intern_edge_lines = []
 			terminal_edge_lines = []
 
-			for edge in self.dual_graph.edges():
+			for edge in dual_graph.edges():
 				node_tail = edge["tail"]
 				node_head = edge["head"]
 
@@ -324,14 +332,18 @@ class Simplex:
 					# print(key_diff_1, key_diff_2, numpy.absolute(key_diff_1 - key_diff_2), sum(numpy.absolute(key_diff_1 - key_diff_2)))
 					if sum(numpy.absolute(key_diff_1 - key_diff_2)) != 2:
 						continue
-					simplex_key_1 = self.size / (self.dimension + 1) * (numpy.ones(self.dimension + 1) + key_diff_1)
-					simplex_key_2 = self.size / (self.dimension + 1) * (numpy.ones(self.dimension + 1) + key_diff_2)
-					position_1 = Simplex.static_key_to_coordinates(simplex_key_1)
-					position_2 = Simplex.static_key_to_coordinates(simplex_key_2)
-					# print(key_diff_1, key_diff_2, position_1, position_2)
-					ball_lines.append([position_1, position_2])
-				# matplotlib_plotter.plot_text(subplot, position_1, str(simplex_key_1), color="black")
-				# matplotlib_plotter.plot_text(subplot, position_2, str(simplex_key_2), color="black")
+
+					for k in [0, 1]:
+						ball_size = self.size / (self.dimension + 1)
+						simplex_key_1 = ball_size * numpy.ones(self.dimension + 1) + (ball_size + k) * key_diff_1
+						simplex_key_2 = ball_size * numpy.ones(self.dimension + 1) + (ball_size + k) * key_diff_2
+						position_1 = Simplex.static_key_to_coordinates(simplex_key_1)
+						position_2 = Simplex.static_key_to_coordinates(simplex_key_2)
+						print(ball_size, key_diff_1, key_diff_2, simplex_key_1, simplex_key_2, sum(numpy.absolute(simplex_key_1)), sum(numpy.absolute(simplex_key_2)))
+						# print(position_1, position_2)
+						ball_lines.append([position_1, position_2])
+						# matplotlib_plotter.plot_text(subplot, position_1, str(simplex_key_1), color="black")
+						# matplotlib_plotter.plot_text(subplot, position_2, str(simplex_key_2), color="black")
 
 			matplotlib_plotter.plot_lines(subplot, ball_lines, color="green", alpha=1.0, width=3)
 
@@ -339,7 +351,7 @@ class Simplex:
 
 
 def main():
-	simplex = Simplex(4, 20)
+	simplex = Simplex(4, 11)
 
 	simplex.write_dual_graph_instance()
 

@@ -139,7 +139,7 @@ def plot_simplex_embedding(graph_json_path, solution_json_path, output_path):
 	plot_edge_description = False
 
 	if plot_simplex_grid:
-		matplotlib_plotter.plot_lines(subplot, Simplex.compute_simplex_grid_lines(simplex_dimension + 1, simplex_size), alpha=0.1)
+		matplotlib_plotter.plot_lines(subplot, Simplex.static_compute_simplex_grid_lines(simplex_dimension, simplex_size), alpha=0.1)
 
 	for embedded_node in embedded_graph["nodes"]:
 		point_size = None
@@ -153,9 +153,9 @@ def plot_simplex_embedding(graph_json_path, solution_json_path, output_path):
 			text_offset[2] = 0.05
 			text_color = "green"
 
-		position = Simplex.key_to_3d_coordinates(embedded_node["position"])
-		matplotlib_plotter.plot_point(subplot, position, point_size, "blue")
-		matplotlib_plotter.plot_text(subplot, position + text_offset, str(embedded_node["id"]), color=text_color)
+		position = Simplex.static_key_to_coordinates(embedded_node["position"])
+		# matplotlib_plotter.plot_point(subplot, position, point_size, "blue")
+		# matplotlib_plotter.plot_text(subplot, position + text_offset, str(embedded_node["id"]), color=text_color)
 
 	used_edge_lines = []
 	not_used_edge_lines = []
@@ -168,11 +168,16 @@ def plot_simplex_embedding(graph_json_path, solution_json_path, output_path):
 					return embedded_node["position"]
 			assert False
 
-		position_1 = Simplex.key_to_3d_coordinates(get_position(embedded_edge["tail"]))
-		position_2 = Simplex.key_to_3d_coordinates(get_position(embedded_edge["head"]))
+		position_1 = Simplex.static_key_to_coordinates(get_position(embedded_edge["tail"]))
+		position_2 = Simplex.static_key_to_coordinates(get_position(embedded_edge["head"]))
 
 		if embedded_edge["integer"] == 1:
 			used_edge_lines.append([position_1, position_2])
+			matplotlib_plotter.plot_text(
+				subplot,
+				0.5 * (position_1 + position_2),
+				str(embedded_edge["weight"])
+			)
 		else:
 			not_used_edge_lines.append([position_1, position_2])
 

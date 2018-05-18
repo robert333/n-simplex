@@ -28,8 +28,11 @@ class Graph:
 	def edges(self):
 		return self.edges_list
 
+	def exists_node(self, key):
+		return tuple(key) in self.key_to_node_map
+
 	def node(self, key):
-		assert tuple(key) in self.key_to_node_map
+		assert self.exists_node(key)
 		return self.key_to_node_map[tuple(key)]
 
 	def key(self, node):

@@ -134,6 +134,17 @@ class Simplex:
 	def compute_simplex_grid_lines(self):
 		return Simplex.static_compute_simplex_grid_lines(self.dimension, self.size)
 
+	def respective_simplex_key(self, dual_key):
+		assert 0 < sum(dual_key) < self.size
+		return dual_key + (self.size - sum(dual_key)) * numpy.ones(self.dimension + 1) / (self.dimension + 1)
+
+	def distance_simplex_key_to_center(self, simplex_key):
+		center_simplex_key = self.size / (self.dimension + 1) * (numpy.ones(self.dimension + 1))
+		return sum(numpy.absolute(center_simplex_key - simplex_key)) / 2.
+
+	def distance_dual_key_to_center(self, dual_key):
+		return self.distance_simplex_key_to_center(self.respective_simplex_key(dual_key))
+
 	def create_simplex_graph(self):
 		simplex_graph = Graph()
 
@@ -153,6 +164,19 @@ class Simplex:
 	def create_dual_graph(self):
 		dual_graph = Graph()
 
+		def is_dual_key_allowed(dual_key):
+			# return True
+			max_distance_to_center = self.size / (self.dimension + 1) + 1
+			return self.distance_dual_key_to_center(dual_key) <= max_distance_to_center
+
+		def create_edge_if_nodes_exists(dual_key_1, dual_key_2, weight):
+			if dual_graph.exists_node(dual_key_1) and dual_graph.exists_node(dual_key_2):
+				dual_graph.create_edge(
+					dual_graph.node(dual_key_1),
+					dual_graph.node(dual_key_2),
+					weight
+				)
+
 		for vertex_index in range(self.dimension + 1):
 			terminal_dual_key = numpy.zeros(self.dimension + 1)
 			for i in range(self.dimension + 1):
@@ -163,10 +187,12 @@ class Simplex:
 			dual_graph.create_node(terminal_dual_key)
 
 		for dual_key in Simplex.static_simplex_keys(self.dimension, self.size - 1):
-			dual_graph.create_node(dual_key)
+			if is_dual_key_allowed(dual_key):
+				dual_graph.create_node(dual_key)
 
 		for dual_key in Simplex.static_simplex_keys(self.dimension, self.size - 2):
-			dual_graph.create_node(dual_key)
+			if is_dual_key_allowed(dual_key):
+				dual_graph.create_node(dual_key)
 
 			for i in range(self.dimension + 1):
 				key_diff = numpy.zeros(self.dimension + 1)
@@ -174,32 +200,29 @@ class Simplex:
 
 				neighbour_dual_key = dual_key + key_diff
 
-				dual_graph.create_edge(
-					dual_graph.node(dual_key),
-					dual_graph.node(neighbour_dual_key),
-					1.0
-				)
+				create_edge_if_nodes_exists(dual_key, neighbour_dual_key, 1.0)
+
+		min_weight = 9999999
 
 		for vertex_index in range(self.dimension + 1):
 			for dual_key in Simplex.static_simplex_keys(self.dimension, self.size - 1):
 				if dual_key[vertex_index] != 0:
 					continue
 				max_distance_to_center = self.size / (self.dimension + 1)
-				middle_simplex_key = max_distance_to_center * (numpy.ones(self.dimension + 1))
-				simplex_key = dual_key + 1 / (self.dimension + 1) * numpy.ones(self.dimension + 1)
-				# print(dual_key, middle_simplex_key, simplex_key, numpy.absolute(middle_simplex_key - simplex_key), sum(numpy.absolute(middle_simplex_key - simplex_key)), self.size)
-				distance_to_center = sum(numpy.absolute(middle_simplex_key - simplex_key)) / 2.
+				distance_to_center = self.distance_simplex_key_to_center(self.respective_simplex_key(dual_key))
 				# base = 2. * (self.size / 3. + 1.)
 				base = 2. * (max_distance_to_center + 1)
 				offset = numpy.floor(max(distance_to_center - max_distance_to_center, 0))
 				# print(max_distance_to_center, dual_key, offset, offset)
 				# offset = max(numpy.amax(dual_key) - (2. * self.size / 3.), 0)
 				# print(key, numpy.amin(key), numpy.amax(key), max(self.num_hyperplanes - 1 - numpy.amin(key), numpy.amax(key)), offset)
-				dual_graph.create_edge(
-					dual_graph.node(dual_key),
-					dual_graph.node(dual_graph.key(vertex_index)),
-					base + offset - 1
-				)
+				weight = base + offset - 1
+				weight += 0
+				if weight < min_weight:
+					min_weight = weight
+				create_edge_if_nodes_exists(dual_key, dual_graph.key(vertex_index), weight)
+
+		print("min weight", min_weight)
 
 		return dual_graph
 
@@ -351,7 +374,7 @@ class Simplex:
 
 
 def main():
-	simplex = Simplex(4, 11)
+	simplex = Simplex(5, 20)
 
 	simplex.write_dual_graph_instance()
 
